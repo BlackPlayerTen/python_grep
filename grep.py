@@ -78,19 +78,45 @@ def check_pattern_in_line(pattern_for_compare, line_for_compare):
     :param line_for_compare: str строка, в которой ведется поиск
     :return: bool есть или нет
     """
+    # бьем подстроку на части, так как звездочка - последовательность любой длины
     pattern_elements = [s for s in pattern_for_compare.split('*') if s]
-    begin = 0
+    begin = 0  # индекс, начиная с которого ведем поиск части подстроки
     for s in pattern_elements:
-        for symbol in s:
-            if begin >= len(line_for_compare):  # поиск окончен, но s еще есть
-                return False
-            if symbol == '?':
-                begin += 1
-                continue
-            starts = line_for_compare.find(symbol, begin)
-            if starts == -1:
-                return False
-            begin = starts + 1
+        search_started_at = 0  # индекс, начиная с которого ведем поиск части подстроки для текущей итерации
+        found = False  # часть подстроки найдена
+        if begin >= len(line_for_compare):  # поиск окончен, но s еще есть
+            return False
+        # перебираем посимвольный поиск для части подстроки
+        while search_started_at < len(line_for_compare):
+            # начинаем поиск с индекса подряд
+            current_search_index = search_started_at
+            for index, symbol in enumerate(s):
+                if current_search_index >= len(line_for_compare):
+                    # вышли за границу поиска => часть подстроки не найдена
+                    break
+                if symbol == '?':
+                    if index == len(s) - 1:  # '?' в маске - последний символ
+                        found = True
+                        break
+                    current_search_index += 1
+                    continue  # к следующему символу
+                if symbol != line_for_compare[current_search_index]:
+                    # символ не совпадает, поиск ведем заново со след. символа
+                    break
+                else:
+                    # совпал
+                    if index == len(s) - 1:  # это был последний символ из подстроки
+                        found = True
+                        break
+                    current_search_index += 1  # к следующему символу в части подстроки
+            if found:  # часть подстроки найдена
+                break
+            # ведем поиск части подстроки со следующего символа
+            search_started_at += 1
+        if not found:  # в конечном итоге, часть подстроки не найдена
+            return False
+        # часть подстроки найдена, переходим к следующей части
+        begin = search_started_at + len(s) + 1
 
     return True
 
