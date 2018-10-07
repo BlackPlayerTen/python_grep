@@ -27,48 +27,32 @@ def print_with_line_number_and_dash(line_number, line):
     output(line)
 
 
-def print_formatted_output(lines, pattern_for_compare, line, line_index, last_printed_index, params):
+def print_formatted_output(line, line_index, last_printed_index, buffer_before, params):
     """
     Влияет на отображение результата, просто печатает строчку; если в контексте появляется строка,
     удовлетворяющая условиям задачи, вывод прекращается
-    :param lines: строки файла
-    :param pattern_for_compare: паттерн
     :param line: строка для печати
     :param line_index: номер строки, который печатается если флаг line_number
     :param last_printed_index: номер строки, которая была распечатана последней (для флага line_number)
+    :param buffer_before: буфер строк предыдущих
     :param params: аргументы командной строки
     """
-    context = params.context if params.context else params.before_context
+    # context = params.context if params.context else params.before_context
     if params.context or params.before_context:
         # Печать N строчек до текущей
-        for i in range(line_index - context, line_index):
-            if i > last_printed_index:
+        for i in buffer_before:
+            if i['index'] == -1:  # buffer_before не полон
+                continue
+            if i['index'] > last_printed_index:
                 if params.line_number:
-                    print_with_line_number_and_dash(i + 1, lines[i])
+                    print_with_line_number_and_dash(i['index'] + 1, i['line'])
                 else:
-                    output(lines[i])
+                    output(i['line'])
 
     if params.line_number:
         print_with_line_number_and_colon(line_index + 1, line)
     else:
         output(line)
-
-    context = params.context if params.context else params.after_context
-    if params.context or params.after_context:
-        for i in range(line_index + 1, line_index + context + 1):
-            if i < len(lines):
-                if not check_line_satisfies_condition(
-                        pattern_for_compare,
-                        lines[i] if not params.ignore_case else lines[i].lower(),
-                        params):
-                    if params.line_number:
-                        print_with_line_number_and_dash(i + 1, lines[i])
-                    else:
-                        output(lines[i])
-                else:
-                    return i
-
-    return line_index + context
 
 
 def check_pattern_in_line(pattern_for_compare, line_for_compare):
@@ -139,10 +123,22 @@ def check_line_satisfies_condition(pattern_for_compare, line_for_compare, params
     return False
 
 
+def append_line(buffer, index, element):
+    buffer = buffer[1:]
+    buffer.append({'index': index, 'line': element})
+
+    return buffer
+
+
 def grep(lines, params):
     pattern = params.pattern
     count = 0
     last_printed_index = -1
+
+    count_before_context = params.context if params.context else params.before_context
+    count_after_context = params.context if params.context else params.after_context
+    buffer_before = [{'index': -1, 'line': ''} for _ in range(count_before_context)]
+    current_count_after = 0  # сколько еще строк выводить после
 
     for line_index, line in enumerate(lines):
         line = line.rstrip()
@@ -154,10 +150,31 @@ def grep(lines, params):
             pattern_for_compare = pattern.lower()
             line_for_compare = line.lower()
 
+        # выводим строки после
+        if count_after_context and current_count_after > 0:
+            if not check_line_satisfies_condition(
+                    pattern_for_compare,
+                    line_for_compare,
+                    params):
+                if params.line_number:
+                    print_with_line_number_and_dash(line_index + 1, line)
+                else:
+                    output(line)
+                current_count_after -= 1
+                last_printed_index = line_index
+
+        # основная строка, удовлетворяющая условию
         if check_line_satisfies_condition(pattern_for_compare, line_for_compare, params):
             if not params.count:
-                last_printed_index = print_formatted_output(lines, pattern_for_compare, line, line_index, last_printed_index, params)
+                print_formatted_output(
+                    line, line_index, last_printed_index, buffer_before, params)
+                last_printed_index = line_index
+                current_count_after = count_after_context
             count += 1
+
+        # добавляем в буфер
+        if count_before_context:
+            buffer_before = append_line(buffer_before, line_index, line)
 
     if params.count:
         output(str(count))
